@@ -125,6 +125,9 @@ python make_art.py scene        # только сцена (около минут
 
 ## Деплой
 
+**Свой сервер (VPS) с общей стеной:** папка `server/` (Node.js + SQLite) и `web/js/server-runtime.js`, который подключён в `index.html` вместо `local-runtime.js`. Пошаговая инструкция для Ubuntu — в [DEPLOY.md](DEPLOY.md). Локальный запуск: `cd server && npm install && SERVE_STATIC=1 node server.js`, сайт на http://127.0.0.1:3000 (токен владельца в `server/data/admin-token.txt`, вход `/?admin=ТОКЕН`). Для работы без сервера верни в `index.html` `js/local-runtime.js`.
+
+Чисто статический вариант без стены на всех:
 Папка `web/` — обычный статический сайт: Vercel, Netlify, Cloudflare Pages или GitHub Pages. Перетащи папку или подключи репозиторий, сборка не нужна.
 
 ## Гостевой режим

@@ -10,3 +10,7 @@ node_modules/
 # secrets: never commit keys
 .env
 *.pem
+
+# backend data (database, secrets) and dependencies
+server/data/
+server/node_modules/

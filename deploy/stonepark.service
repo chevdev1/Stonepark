@@ -1,0 +1,20 @@
+# systemd unit. Install:  sudo cp deploy/stonepark.service /etc/systemd/system/
+#                         sudo systemctl daemon-reload && sudo systemctl enable --now stonepark
+[Unit]
+Description=STONEPARK backend
+After=network.target
+
+[Service]
+Type=simple
+User=stonepark
+WorkingDirectory=/var/www/stonepark/server
+EnvironmentFile=/etc/stonepark.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/stonepark
+
+[Install]
+WantedBy=multi-user.target

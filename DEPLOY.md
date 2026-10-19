@@ -1,45 +1,97 @@
-# Как выложить STONEPARK
+# Как выложить STONEPARK на VPS (Ubuntu)
 
-## 1. Репозиторий (GitHub)
+Репозиторий: https://github.com/chevdev1/Stonepark.git
 
-Репозиторий уже инициализирован, первый коммит сделан. Создай пустой репозиторий на GitHub (без README), затем:
+Что где работает:
+- `web/` — сайт. Раздаёт nginx.
+- `server/` — бэкенд (Node.js + SQLite). Хранит стену, чат, галерею и рассылает рисунки всем игрокам сразу. nginx проксирует ему `/ws` и `/api`.
+- База — один файл `/var/lib/stonepark/stonepark.db`. Рисунки стены остаются там навсегда.
 
-```bash
-cd stonepark
-git remote add origin git@github.com:ТВОЙ_АККАУНТ/stonepark.git
-git branch -M main
-git push -u origin main
-```
+Команды ниже выполняй на сервере по SSH.
 
-Самый большой файл весит 12 МБ, Git LFS не нужен. Ключи и пароли в репозиторий не кладём: `.env` уже в `.gitignore`.
-
-## 2. VPS (Ubuntu/Debian)
+## 1. Пакеты и Node.js 22
 
 ```bash
-sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx rsync
+sudo apt update && sudo apt install -y nginx git curl certbot python3-certbot-nginx
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v        # должно быть v22.13 или выше
 sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
-sudo mkdir -p /var/www/stonepark/web && sudo chown -R $USER /var/www/stonepark
 ```
 
-Домен: A-запись (и AAAA, если есть IPv6) на IP сервера.
+## 2. Код
 
 ```bash
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/stonepark   # поменяй stonepark.example на свой домен
-sudo ln -s /etc/nginx/sites-available/stonepark /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d твой-домен -d www.твой-домен             # HTTPS, продлевается сам
+sudo useradd --system --home /var/www/stonepark --shell /usr/sbin/nologin stonepark
+sudo git clone https://github.com/chevdev1/Stonepark.git /var/www/stonepark
+cd /var/www/stonepark/server && sudo npm install --omit=dev
+sudo mkdir -p /var/lib/stonepark && sudo chown stonepark /var/lib/stonepark
 ```
 
-Заливка сайта с компьютера: `./deploy/deploy.sh user@IP_СЕРВЕРА`. Или на сервере: `git clone` и `git pull` при обновлениях, а `root` в nginx указывает на папку `web` в клоне.
+## 3. Настройки бэкенда
 
-## 3. Что важно понимать
+```bash
+sudo cp /var/www/stonepark/server/.env.example /etc/stonepark.env
+sudo chmod 600 /etc/stonepark.env
+sudo nano /etc/stonepark.env
+```
 
-**Общие функции.** На claude.ai стену, чат, ранкед, треки, галерею и курсоры держит платформа. На VPS их заменяет `web/js/local-runtime.js`, а он хранит всё в браузере посетителя. Поэтому на VPS сайт сначала работает «у каждого свой»: рисунки и сообщения не видны другим. Чтобы сделать их общими, нужен небольшой бэкенд (Node.js + WebSocket + SQLite или Supabase/Firebase) с тем же API, что описан в README.
+В файле поменяй:
+- `ADMIN_TOKEN` — длинный пароль владельца (придумай сам или `openssl rand -base64 24`). Запиши его.
+- `ALLOWED_ORIGINS` — твой домен с `https://`.
 
-**Пейджер CH.** Живые ответы шли через Claude на claude.ai. На VPS нужен серверный эндпоинт с ключом Anthropic API. Ключ хранится только на сервере (в `.env`), в браузер он не попадает. Плюс лимит запросов, иначе любой сможет тратить твой баланс. Без эндпоинта CH отвечает заготовленными фразами.
+Запуск:
 
-**Модерация.** Стена и чат — пользовательский контент. Проверки на сайте (длина, ссылки, частота) легко обойти, поэтому на бэкенде нужны свои лимиты и кнопка удаления для владельца.
+```bash
+sudo cp /var/www/stonepark/deploy/stonepark.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now stonepark
+curl localhost:3000/api/health        # ответ: ok
+sudo journalctl -u stonepark -f       # логи (выход: Ctrl+C)
+```
 
-**Бэкапы.** Как только появится база, настрой ежедневную копию (cron + архив в другое место).
+## 4. nginx и HTTPS
 
-**Обновления.** `index.html` не кэшируется, CSS и JS кэшируются на час, медиа на 30 дней. Если заменяешь картинку или видео, давай файлу новое имя, иначе у людей останется старая версия.
+Домен: A-запись на IP сервера.
+
+```bash
+sudo cp /var/www/stonepark/deploy/nginx.conf /etc/nginx/sites-available/stonepark
+sudo nano /etc/nginx/sites-available/stonepark     # замени stonepark.example на свой домен
+sudo ln -s /etc/nginx/sites-available/stonepark /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d твой-домен -d www.твой-домен
+```
+
+Если домена пока нет, оставь `server_name _;` и открывай сайт по IP (по http).
+
+## 5. Владелец
+
+Один раз открой `https://твой-домен/?admin=ТВОЙ_ADMIN_TOKEN`. Браузер запомнит токен. Дальше у тебя появятся: кнопка сброса стены, удаление любых штрихов и сообщений, загрузка треков и работ в галерею. Остальные игроки — обычные: рисуют, пишут в чат, голосуют, удалять могут только свои штрихи. Выйти из режима владельца: `?logout`.
+
+## 6. Обновление сайта
+
+На сервере:
+
+```bash
+cd /var/www/stonepark && sudo git pull
+sudo systemctl restart stonepark      # только если менялась папка server/
+```
+
+База при обновлении не трогается (она в `/var/lib/stonepark`).
+
+## 7. Бэкап
+
+```bash
+sudo crontab -e
+# добавь строку (копия базы каждую ночь в 04:00, хранится 14 дней):
+0 4 * * * mkdir -p /var/backups/stonepark && sqlite3 /var/lib/stonepark/stonepark.db ".backup /var/backups/stonepark/sp-$(date +\%F).db" && find /var/backups/stonepark -mtime +14 -delete
+```
+
+Нужен `sudo apt install -y sqlite3`.
+
+## Что важно знать
+
+- **Игроки анонимные.** Каждому браузеру сервер выдаёт id. Свои штрихи человек удалить может, чужие нет. Если очистить данные браузера, id сменится.
+- **Лимиты.** На соединение действует лимит записей в секунду, в чате не больше одного сообщения в 1,5 с (пачками до 3), на одной эпохе стены не больше 30 000 штрихов. Сверх лимита сайт показывает «стена заполнена». Владелец может сбросить стену, старые рисунки при этом остаются в базе.
+- **Пейджер CH.** Живые ответы от Claude не подключены, CH отвечает заготовленными фразами. Для живых нужен отдельный эндпоинт с ключом Anthropic (только на сервере).
+- **Если сервер лёг**, сайт переходит в гостевой режим: рисуют каждый у себя, ничего не теряется и не ломается.

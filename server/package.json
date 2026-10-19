@@ -1,0 +1,12 @@
+{
+  "name": "stonepark-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "STONEPARK backend: shared wall, chat, gallery, presence (WebSocket + SQLite)",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
