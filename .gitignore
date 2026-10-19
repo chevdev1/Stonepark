@@ -1,0 +1,12 @@
+# system
+.DS_Store
+Thumbs.db
+# python tools
+__pycache__/
+*.pyc
+.venv/
+# node (future backend)
+node_modules/
+# secrets: never commit keys
+.env
+*.pem
