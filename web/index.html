@@ -4,11 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>STONEPARK</title>
+<meta name="theme-color" content="#05090D">
+<link rel="icon" id="favicon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>try{if(localStorage.getItem('sp_intro')!=='done')document.documentElement.classList.add('first')}catch(e){document.documentElement.classList.add('first')}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Handjet:wght@400;600&family=DotGothic16&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- first-visit loader: removed by js/boot-loader.js once key art is ready -->
+<div class="boot" id="boot" role="status" aria-live="polite">
+  <div class="boot-in">
+    <div class="boot-logo" aria-label="STONEPARK"><span data-text="STONEPARK">STONEPARK</span></div>
+    <div class="boot-can" aria-hidden="true"><i class="bc-cap"></i><i class="bc-body"></i><i class="bc-puff"></i></div>
+    <div class="boot-bar" aria-hidden="true"><i id="bootFill"></i></div>
+    <div class="boot-row"><span id="bootTip">Спускаемся в подземку…</span><b id="bootPct">0%</b></div>
+  </div>
+</div>
 <header>
   <div class="wrap">
     <a class="logo" href="#top">STONEPARK</a>
@@ -186,7 +199,7 @@
   <section id="token" aria-labelledby="token-title">
     <div class="wrap">
       <div class="tk-grid">
-        <div class="tk-art" aria-hidden="true"><div class="tk-rocket" id="tkRocket"></div></div>
+        <div class="tk-art" aria-hidden="true"><div class="tk-rocket" id="tkRocket"><img src="assets/img/ui/rocket.png" alt="" width="1320" height="160" decoding="async"></div></div>
         <div class="tk-intro">
           <div class="h2row"><h2 id="token-title" data-i18n="tk_h">Токен $STONEPARK</h2></div>
           <p class="lead" data-i18n="tk_lead">Как устроен запуск — простыми словами и без обещаний.</p>
@@ -474,7 +487,11 @@
 
 <!-- intro gate: only CH is available on the first visit -->
 <div class="intro-gate" id="introGate" hidden>
-  <div class="bg" style="background-image:url('assets/img/scene_still.png')"></div>
+  <div class="ig-title" aria-hidden="true">STONEPARK</div>
+  <div class="ig-stage" aria-hidden="true">
+    <img src="assets/img/scene_still.png" alt="" decoding="async">
+    <i class="ig-scan"></i>
+  </div>
   <div class="card" id="introCard">
     <img class="who" src="assets/img/ui/p_vex.png" alt="">
     <h2 data-i18n="intro_title">CH хочет поговорить</h2>
@@ -493,7 +510,7 @@
   <div class="face"><img id="talkFace" alt=""><span class="stoned" id="talkStoned" hidden></span></div>
   <div class="body">
     <div class="name" id="talkName">CH</div>
-    <div class="line"><span id="talkText" aria-hidden="true"></span><span class="caret" id="talkCaret" hidden></span></div>
+    <div class="line" id="talkLineBox"><span class="ghost" id="talkGhost" aria-hidden="true"></span><span class="typed"><span id="talkText" aria-hidden="true"></span><span class="caret" id="talkCaret" hidden></span></span></div>
     <p class="sub" id="talkSub" aria-hidden="true" hidden></p>
     <p class="sr" id="talkLive" aria-live="polite"></p>
     <div class="ctrl">
@@ -738,6 +755,8 @@
   </form>
 </dialog>
 
+<script src="js/boot-loader.js"></script>
+<script src="js/favicon.js"></script>
 <script src="js/server-runtime.js"></script>
 <script src="js/app.js"></script>
 </body>

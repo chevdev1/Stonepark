@@ -118,7 +118,8 @@ h2{margin:0 0 12px;font-family:'Press Start 2P',monospace;font-size:20px;line-he
 .quest[data-done="true"] .qi{background:var(--green)}
 .quest[data-done="true"]{color:var(--muted)}
 .h2row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.h2row h2{margin:0}
+.h2row h2{margin:0;min-width:0;overflow-wrap:anywhere}
+@media (max-width:560px){ .h2row{flex-wrap:nowrap;align-items:center;gap:10px} .h2row h2{font-size:clamp(15px,5vw,20px);flex:0 1 auto} .help{flex:0 0 36px} }
 .help{width:36px;height:36px;min-width:36px;border:3px solid var(--yellow);background:transparent;color:var(--yellow);font-family:'Press Start 2P',monospace;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .help:hover{background:var(--yellow);color:var(--bg)}
 
@@ -128,19 +129,36 @@ h2{margin:0 0 12px;font-family:'Press Start 2P',monospace;font-size:20px;line-he
 .talk .face img{width:100%;height:100%;image-rendering:pixelated}
 .talk .body{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:8px}
 .talk .name{font-family:'Press Start 2P',monospace;font-size:12px;color:var(--who,#2EE6E6)}
-.talk .line{font-size:20px;line-height:1.45;min-height:3em}
+.talk .line{position:relative;font-size:20px;line-height:1.45;min-height:3em}
+.talk .line .ghost{display:block;visibility:hidden}
+.talk .line .typed{position:absolute;left:0;top:0;right:0}
 .talk .ctrl{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
 .talk .ctrl button{min-height:44px;padding:0 14px;border:3px solid #E8F1EE;background:transparent;color:#E8F1EE;font-family:'Handjet','DotGothic16',monospace;font-size:17px;cursor:pointer}
 .talk .ctrl button.primary{background:#E8F1EE;color:#071216}
 .talk .ctrl button:focus-visible{outline:3px solid #FFD23A;outline-offset:2px}
 .caret{display:inline-block;width:10px;height:10px;background:#FFF27A;margin-left:6px;animation:selblink .6s steps(2) infinite}
-@media (max-width:560px){ .talk .face{width:64px;height:64px} .talk .line{font-size:18px} }
+@media (max-width:560px){
+  /* phone: portrait + name on one row, text across the full width, buttons in tidy rows at the bottom */
+  .talk{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px 12px;align-items:center;width:calc(100% - 16px);padding:12px;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+  .talk .face{width:64px;height:64px;grid-column:1;grid-row:1}
+  .talk .body{display:contents}
+  .talk .name{grid-column:2;grid-row:1;align-self:center}
+  .talk .line{grid-column:1 / -1;font-size:18px;min-height:0}
+  .talk .sub{grid-column:1 / -1;font-size:16px}
+  .talk .ctrl{grid-column:1 / -1;display:flex;flex-wrap:wrap;justify-content:stretch;gap:8px}
+  .talk .ctrl button{flex:1 1 auto;min-width:0;padding:0 10px;font-size:16px}
+  .talk .ctrl button.primary{flex:2 1 42%;order:9}
+  #talkClose{order:8}
+}
 
 /* ---------- intro gate ---------- */
-.intro-gate{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;background:#03080A}
-.intro-gate .bg{position:absolute;inset:0;background-size:cover;background-position:center;image-rendering:pixelated;opacity:.35;filter:saturate(.8)}
-.intro-gate .card{position:relative;max-width:520px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px;color:#E8F1EE}
-.intro-gate .card .who{width:128px;height:128px;border:4px solid #2EE6E6;background:#0C2026;image-rendering:pixelated}
+.intro-gate{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:18px;padding:max(28px,6vh) 16px 24px;background:radial-gradient(ellipse at 50% 30%,#10262A 0,#03080A 70%);overflow:auto}
+.ig-title{font-family:'Press Start 2P',monospace;font-size:clamp(14px,3.6vw,22px);color:#E8F1EE;text-shadow:3px 0 #FF3EA5,-3px 0 #2EE6E6;letter-spacing:.06em}
+.ig-stage{position:relative;flex:0 0 auto;width:min(100%,880px,max(280px,calc((100dvh - 330px) * 16 / 9)));aspect-ratio:16/9;border:4px solid #E8F1EE;box-shadow:0 0 0 4px #03080A,8px 8px 0 4px rgba(0,0,0,.5);background:#071216;overflow:hidden}
+.ig-stage img{display:block;width:100%;height:100%;image-rendering:pixelated;filter:saturate(.9) brightness(.85)}
+.ig-scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%)}
+.intro-gate .card{position:relative;max-width:520px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;color:#E8F1EE}
+.intro-gate .card .who{width:96px;height:96px;border:4px solid #2EE6E6;background:#0C2026;image-rendering:pixelated}
 .intro-gate h2{margin:0;font-family:'Press Start 2P',monospace;font-size:16px;line-height:1.6}
 .intro-gate .skip{background:none;border:0;color:#9DB8B4;font-family:'Handjet','DotGothic16',monospace;font-size:16px;text-decoration:underline;cursor:pointer;min-height:44px}
 .item-got{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;color:#E8F1EE;font-family:'Press Start 2P',monospace;font-size:13px;text-align:center;line-height:1.7}
@@ -239,12 +257,14 @@ html[data-motion="off"] .hot:hover img,html[data-motion="off"] .hot:focus-visibl
 @keyframes buzz{50%{transform:translateX(2px) rotate(4deg)}}
 .intro-gate .card .who{animation:bob 1.3s steps(2) infinite}
 .intro-gate .card{animation:talkIn2 .5s steps(6) both}
+.ig-stage{animation:stageIn .7s steps(8) both}
+@keyframes stageIn{from{opacity:0;transform:scaleY(.04)}60%{opacity:1}to{opacity:1;transform:none}}
 @keyframes talkIn2{0%{transform:translateY(20px) scale(.7);opacity:0}100%{transform:none;opacity:1}}
 .item-got .pg{animation:itemUp 1.2s steps(8) both}
 @keyframes itemUp{0%{transform:scale(.5) translateY(30px);opacity:0}40%{transform:scale(2.8) translateY(-6px);opacity:1}60%{transform:scale(2.4)}100%{transform:scale(2.4)}}
 .wall-preview .enter{transition:transform .1s steps(2)}
 .wall-preview:hover .enter{transform:translate(-50%,-50%) scale(1.06)}
-html[data-motion="off"] .talk.in,html[data-motion="off"] .talk.out,html[data-motion="off"] .talk .face img,html[data-motion="off"] .talk.speaking .face img,html[data-motion="off"] .talk .face.pop,html[data-motion="off"] .talk .name.slide,html[data-motion="off"] .talk .line.next,html[data-motion="off"] .talk.speaking .face::after,html[data-motion="off"] .emote,html[data-motion="off"] .hot:hover .tag,html[data-motion="off"] .hot.picked img,html[data-motion="off"] .quest:hover .qi,html[data-motion="off"] .help,html[data-motion="off"] .help:hover,html[data-motion="off"] .quest.justdone,html[data-motion="off"] .lcd .m,html[data-motion="off"] .pager.in,html[data-motion="off"] .pager-btn:hover .pg-icon,html[data-motion="off"] .pager-btn.ring .pg-icon,html[data-motion="off"] .intro-gate .card .who,html[data-motion="off"] .intro-gate .card,html[data-motion="off"] .item-got .pg{animation:none}
+html[data-motion="off"] .talk.in,html[data-motion="off"] .talk.out,html[data-motion="off"] .talk .face img,html[data-motion="off"] .talk.speaking .face img,html[data-motion="off"] .talk .face.pop,html[data-motion="off"] .talk .name.slide,html[data-motion="off"] .talk .line.next,html[data-motion="off"] .talk.speaking .face::after,html[data-motion="off"] .emote,html[data-motion="off"] .hot:hover .tag,html[data-motion="off"] .hot.picked img,html[data-motion="off"] .quest:hover .qi,html[data-motion="off"] .help,html[data-motion="off"] .help:hover,html[data-motion="off"] .quest.justdone,html[data-motion="off"] .lcd .m,html[data-motion="off"] .pager.in,html[data-motion="off"] .pager-btn:hover .pg-icon,html[data-motion="off"] .pager-btn.ring .pg-icon,html[data-motion="off"] .intro-gate .card .who,html[data-motion="off"] .intro-gate .card,html[data-motion="off"] .ig-stage,html[data-motion="off"] .item-got .pg{animation:none}
 html[data-motion="off"] .emote{opacity:1}
 
 /* ---------- gallery ---------- */
@@ -836,7 +856,8 @@ html[data-motion="off"] .nav-hot .cup,html[data-motion="off"] .hb-ranked .cup{an
 /* ---------- token ---------- */
 .tk-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:30px;align-items:center}
 .tk-art{position:relative;aspect-ratio:220/160;background:radial-gradient(circle at 70% 30%,rgba(155,92,255,.35),transparent 60%),radial-gradient(1px 1px at 20% 30%,#E8F1EE 50%,transparent 51%),radial-gradient(1px 1px at 60% 70%,#E8F1EE 50%,transparent 51%),radial-gradient(1px 1px at 85% 15%,#E8F1EE 50%,transparent 51%),linear-gradient(#07061A,#1A1236);border:3px solid #05090D;box-shadow:8px 8px 0 rgba(0,0,0,.35);overflow:hidden}
-.tk-rocket{position:absolute;inset:0;background:url("assets/img/ui/rocket.png") 0 0/600% 100% no-repeat;image-rendering:pixelated;animation:tkBob 1.4s steps(2) infinite}
+.tk-rocket{position:absolute;inset:0;overflow:hidden;animation:tkBob 1.4s steps(2) infinite}
+.tk-rocket img{display:block;position:absolute;left:0;top:0;width:600%;height:100%;max-width:none;image-rendering:pixelated}
 @keyframes tkBob{50%{transform:translate(4px,-4px)}}
 .tk-cap{margin:6px 0 14px;padding:14px 16px;background:var(--surface);border:2px solid var(--line)}
 .tk-cap-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
@@ -1038,3 +1059,31 @@ html[data-motion="off"] .ticker-track{animation:none;flex-wrap:wrap;width:auto;p
 html[data-motion="off"] .track.playing .disc{animation:none}
 html[data-motion="off"] .disc{transition:none}
 html[data-motion="off"] [aria-pressed="true"] .eq i{animation:none;height:12px}
+
+
+/* ---------- first-visit loader ---------- */
+.boot{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;background:#03080A;color:#E8F1EE}
+.boot::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px)}
+.boot.out{opacity:0;transition:opacity .35s steps(4);pointer-events:none}
+.boot-in{position:relative;width:min(360px,100%);display:flex;flex-direction:column;align-items:center;gap:22px}
+.boot-logo{font-family:'Press Start 2P',monospace;font-size:clamp(18px,6vw,26px);position:relative;letter-spacing:.04em}
+.boot-logo span{position:relative;display:block}
+.boot-logo span::before,.boot-logo span::after{content:attr(data-text);position:absolute;left:0;top:0;width:100%}
+.boot-logo span::before{color:#FF3EA5;transform:translate(3px,0);mix-blend-mode:screen;animation:bootGlitchA 1.8s steps(1) infinite}
+.boot-logo span::after{color:#2EE6E6;transform:translate(-3px,0);mix-blend-mode:screen;animation:bootGlitchB 1.8s steps(1) infinite}
+@keyframes bootGlitchA{0%,86%{transform:translate(2px,0);clip-path:inset(0)}88%{transform:translate(8px,-2px);clip-path:inset(10% 0 55% 0)}92%{transform:translate(-5px,1px);clip-path:inset(60% 0 8% 0)}96%,100%{transform:translate(2px,0);clip-path:inset(0)}}
+@keyframes bootGlitchB{0%,80%{transform:translate(-2px,0);clip-path:inset(0)}82%{transform:translate(-7px,2px);clip-path:inset(50% 0 10% 0)}90%{transform:translate(5px,-1px);clip-path:inset(5% 0 62% 0)}95%,100%{transform:translate(-2px,0);clip-path:inset(0)}}
+/* spray can drawn in CSS pixels: shakes and puffs paint */
+.boot-can{position:relative;width:64px;height:84px;animation:bootShake .5s steps(2) infinite}
+.bc-cap{position:absolute;left:20px;top:0;width:20px;height:12px;background:#E8432D;box-shadow:0 0 0 4px #14122A}
+.bc-body{position:absolute;left:8px;top:16px;width:44px;height:64px;box-shadow:0 0 0 4px #14122A,inset 12px 0 0 #4F6FF0,inset -8px 0 0 #1A2A8C;background:linear-gradient(#FFE14A,#FFE14A) 0 20px/100% 8px no-repeat,linear-gradient(#FF8A1F,#FF8A1F) 0 28px/100% 8px no-repeat,#2D4BD6}
+.bc-puff{position:absolute;left:44px;top:-4px;width:8px;height:8px;background:#FF8A1F;box-shadow:12px -8px 0 #FFE14A,22px 2px 0 #C02AA8,6px -18px 0 #E8432D,26px -16px 0 #4F6FF0;animation:bootPuff .6s steps(4) infinite}
+@keyframes bootShake{50%{transform:translate(2px,-2px) rotate(2deg)}}
+@keyframes bootPuff{0%{transform:translate(0,4px) scale(.6);opacity:0}30%{opacity:1}100%{transform:translate(6px,-14px) scale(1.2);opacity:0}}
+.boot-bar{width:100%;height:18px;border:3px solid #E8F1EE;background:#071216;padding:2px}
+.boot-bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,#5CFF96 0 8px,#2EA866 8px 10px)}
+.boot-row{width:100%;display:flex;justify-content:space-between;gap:12px;font-size:17px;color:#9DB8B4}
+.boot-row b{font-family:'Press Start 2P',monospace;font-size:10px;color:#FFD23A;font-weight:400;align-self:center}
+html.booting{overflow:hidden}
+html[data-motion="off"] .boot-can,html[data-motion="off"] .bc-puff,html[data-motion="off"] .boot-logo span::before,html[data-motion="off"] .boot-logo span::after{animation:none}
+@media (prefers-reduced-motion: reduce){ .boot-can,.bc-puff,.boot-logo span::before,.boot-logo span::after{animation:none} }

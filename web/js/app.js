@@ -1963,7 +1963,15 @@
     talkChoices.textContent = ''; talkNext.hidden = true; talkSmoke.hidden = true;
     pendingChoices.forEach((c, i) => { const b = el('button', 'choice', c.label); b.type = 'button'; b.addEventListener('click', () => { const fn = c.fn; pendingChoices = null; talkChoices.textContent = ''; talkNext.hidden = false; endTalk(true); setTimeout(fn, 220); }); talkChoices.appendChild(b); if (i === 0) setTimeout(() => b.focus(), 0); });
   }
-  const talkFaceBox = talkFace.parentElement, talkLine = talkText.parentElement;
+  const talkFaceBox = talkFace.parentElement, talkLine = document.getElementById('talkLineBox'), talkGhost = document.getElementById('talkGhost');
+  // the ghost holds the whole line invisibly, so the box has its final height from the first letter (no growing while typing)
+  function reserveLines(lines){
+    talkLine.style.minHeight = '';
+    let h = 0;
+    lines.forEach(l => { talkGhost.textContent = l.text || ''; h = Math.max(h, talkGhost.offsetHeight); });
+    talkGhost.textContent = '';
+    if (h) talkLine.style.minHeight = h + 'px';
+  }
   function replay(node, cls){ node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); }
   function setFace(k){ if (!speaker) return; const f = (isStoned(speaker) && STONED_FACE[speaker]) || PORTRAIT[speaker] || PORTRAIT.vex; talkFace.src = f[k] || f[0]; }
   function startMouth(){ stopMouth(); let o = false; talk.classList.add('speaking'); mouthTimer = setInterval(() => { o = !o; setFace(o ? 1 : 0); }, 110); }
@@ -1986,6 +1994,7 @@
     if (talk.hidden) lastFocus = document.activeElement;
     speaker = null;
     talk.hidden = false; talk.classList.remove('out');
+    try { reserveLines(queue); } catch(e) {}
     if (opening){ try { replay(talk, 'in'); } catch(e) {} }
     nextLine(true);
     if (opening) SFX.open();
@@ -2001,7 +2010,7 @@
     talkWatch.hidden = !l.video; talkWatch.dataset.video = l.video || '';
     talkSub.textContent = l.sub || ''; talkSub.hidden = !l.sub;
     const st = isStoned(l.who); talkStoned.hidden = !st; if (st) talkStoned.textContent = stampWord(l.who);
-    fullLine = l.text; talkLive.textContent = c.name + ': ' + l.text + (l.sub ? ' — ' + l.sub : '');
+    fullLine = l.text; talkGhost.textContent = l.text; talkLive.textContent = c.name + ': ' + l.text + (l.sub ? ' — ' + l.sub : '');
     if (l.who === 'johnny') talkName.textContent = t('johnny_name');
     talkText.textContent = ''; talkCaret.hidden = true;
     talkNext.textContent = queue.length ? t('talk_next') : t('talk_done');
@@ -2021,7 +2030,7 @@
     try { showLine(l); }
     catch(err){
       clearInterval(typingTimer); typingTimer = null; try { stopMouth(); } catch(e) {}
-      fullLine = l.text || ''; talkText.textContent = fullLine; talkCaret.hidden = false;
+      fullLine = l.text || ''; talkGhost.textContent = fullLine; talkText.textContent = fullLine; talkCaret.hidden = false;
       talkName.textContent = (CHAR[l.who] || CHAR.vex).name; talkLive.textContent = talkName.textContent + ': ' + fullLine;
       talkSub.textContent = l.sub || ''; talkSub.hidden = !l.sub;
       talkNext.textContent = queue.length ? t('talk_next') : t('talk_done');
@@ -3051,7 +3060,8 @@
   // ---- token section: rocket animation, market-cap bar, launchpad link
   (function tokenSection(){
     const r = document.getElementById('tkRocket'); let f = 0;
-    setInterval(() => { if (reduceMotion || document.hidden) return; f = (f + 1) % 6; r.style.backgroundPosition = (f * 20) + '% 0'; }, 110);
+    const sheet = r.querySelector('img');
+    setInterval(() => { if (reduceMotion || document.hidden) return; f = (f + 1) % 6; sheet.style.transform = 'translateX(' + (-f * 100 / 6) + '%)'; }, 110);
     const GOAL = 5000;
     function upd(){
       const cap = Number(settings && settings.mcap) || 0;
