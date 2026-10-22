@@ -1092,3 +1092,10 @@ html[data-motion="off"] [aria-pressed="true"] .eq i{animation:none;height:12px}
 html.booting{overflow:hidden}
 html[data-motion="off"] .boot-can,html[data-motion="off"] .bc-puff,html[data-motion="off"] .boot-logo span::before,html[data-motion="off"] .boot-logo span::after{animation:none}
 @media (prefers-reduced-motion: reduce){ .boot-can,.bc-puff,.boot-logo span::before,.boot-logo span::after{animation:none} }
+
+
+/* ---------- 8-bit spray-can cursor (mouse only, see js/cursor.js) ---------- */
+#pcur{position:fixed;left:0;top:0;width:64px;height:64px;z-index:100000;pointer-events:none;visibility:hidden;will-change:transform}
+#pcur canvas{display:block;width:64px;height:64px;image-rendering:pixelated}
+#ptrail{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:99999;pointer-events:none}
+html.pcur:not(.pcur-native),html.pcur:not(.pcur-native) *{cursor:none !important}
