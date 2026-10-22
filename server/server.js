@@ -24,8 +24,9 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data
 const WEB_DIR = path.resolve(process.env.WEB_DIR || path.join(__dirname, '..', 'web'));
 const SERVE_STATIC = process.env.SERVE_STATIC === '1'; // for local testing; in production nginx serves /web
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
-const MAX_STROKES_PER_EPOCH = 30000;
-const INIT_LIMIT = 5000;
+// the wall is 8640 x 4860; ~50 people can paint for hours. Everything stored is also sent on join, so keep the two equal.
+const MAX_STROKES_PER_EPOCH = 60000;
+const INIT_LIMIT = 60000;
 const MAX_UPLOAD = 12 * 1024 * 1024;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -258,8 +259,11 @@ function handle(conn, m) {
     conn.cols.add(m.col);
     if (!subs.has(m.col)) subs.set(m.col, new Set());
     subs.get(m.col).add(conn);
-    const rows = q.list.all(m.col, INIT_LIMIT).reverse().map((r) => [r.id, JSON.parse(r.data)]);
-    conn.out({ t: 'init', col: m.col, docs: rows });
+    // newest INIT_LIMIT docs, oldest first; the stored JSON is spliced in as text (no parse/stringify of tens of thousands of strokes)
+    const rows = q.list.all(m.col, INIT_LIMIT);
+    let msg = '{"t":"init","col":' + JSON.stringify(m.col) + ',"docs":[';
+    for (let i = rows.length - 1; i >= 0; i--) msg += '[' + JSON.stringify(rows[i].id) + ',' + rows[i].data + ']' + (i ? ',' : '');
+    if (conn.ws.readyState === 1) conn.ws.send(msg + ']}');
     return;
   }
 
@@ -267,7 +271,7 @@ function handle(conn, m) {
     const now = Date.now(); if (now - conn.presAt < 40) return;
     const p = m.p || {};
     const clean = {
-      x: Math.max(0, Math.min(1, +p.x || 0)), y: Math.max(0, Math.min(1, +p.y || 0)),
+      x: p.x == null ? null : Math.max(0, Math.min(1, +p.x || 0)), y: p.y == null ? null : Math.max(0, Math.min(1, +p.y || 0)),   // null = pointer left the wall
       c: typeof p.c === 'string' ? p.c.slice(0, 9) : '', down: !!p.down, n: typeof p.n === 'string' ? p.n.slice(0, 16) : '',
     };
     conn.pres = clean; conn.presAt = now;

@@ -39,7 +39,8 @@
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const split = (path) => { const i = path.lastIndexOf('/'); return [path.slice(0, i), path.slice(i + 1)]; };
   const col$ = (c) => mem[c] || (mem[c] = {});
-  const notify = (col) => listeners.forEach((l) => l.col === col && l.run());
+  // notify(col, id): one document changed (id) or the whole collection was replaced (no id)
+  const notify = (col, id) => listeners.forEach((l) => { if (l.col === col) { if (l.touch) l.touch(id); l.run(); } });
 
   let readyRes; const ready = new Promise((r) => { readyRes = r; });
   setTimeout(() => readyRes(), 6000); // do not hang the page if the server is down
@@ -65,8 +66,8 @@
           const c = {}; (m.docs || []).forEach(([id, d]) => { c[id] = d; });
           mem[m.col] = c; notify(m.col); break;
         }
-        case 'set': col$(m.col)[m.id] = m.data; notify(m.col); break;
-        case 'del': delete col$(m.col)[m.id]; notify(m.col); break;
+        case 'set': col$(m.col)[m.id] = m.data; notify(m.col, m.id); break;
+        case 'del': delete col$(m.col)[m.id]; notify(m.col, m.id); break;
         case 'ack': {
           const p = pending.get(m.rid); if (!p) break;
           pending.delete(m.rid); clearTimeout(p.timer);
@@ -108,9 +109,9 @@
   function docRef(col, id) {
     return {
       id,
-      async set(data) { const d = clone(data); await write('set', col, id, d); col$(col)[id] = d; notify(col); return { id }; },
-      async update(data) { const d = clone(data); await write('update', col, id, d); col$(col)[id] = Object.assign({}, col$(col)[id] || {}, d); notify(col); return { id }; },
-      async delete() { await write('del', col, id); delete col$(col)[id]; notify(col); },
+      async set(data) { const d = clone(data); await write('set', col, id, d); col$(col)[id] = d; notify(col, id); return { id }; },
+      async update(data) { const d = clone(data); await write('update', col, id, d); col$(col)[id] = Object.assign({}, col$(col)[id] || {}, d); notify(col, id); return { id }; },
+      async delete() { await write('del', col, id); delete col$(col)[id]; notify(col, id); },
       async get() { const d = col$(col)[id]; return { id, exists: !!d, data: () => (d ? clone(d) : null) }; },
       onSnapshot(cb) {
         const l = { col, run: () => { if (!(col in mem)) return; const d = col$(col)[id]; cb({ id, exists: !!d, data: () => (d ? clone(d) : null) }); } };
@@ -125,6 +126,39 @@
       limit(n) { return query(col, Object.assign({}, opts, { n })); },
       doc(id) { return docRef(col, id); },
       onSnapshot(cb) {
+        // big live collections (the wall's strokes: limit >= 10000) are diffed per changed document;
+        // small ones are re-sorted and compared as a whole
+        if (opts.n >= 10000) {
+          const seen = new Map(); const dirty = new Set(); let all = true, started = false;
+          const l = {
+            col,
+            touch: (id) => { if (id === undefined) all = true; else dirty.add(id); },
+            run: () => {
+              if (!started && !(col in mem)) return;
+              started = true;
+              const c = col$(col); const changes = [];
+              const doc = (id, d) => ({ id, data: () => d });
+              if (all) {
+                all = false; dirty.clear();
+                Object.keys(c).forEach((id) => { const d = c[id]; changes.push({ type: seen.has(id) ? (seen.get(id) === d ? null : 'modified') : 'added', doc: doc(id, d) }); seen.set(id, d); });
+                seen.forEach((d, id) => { if (!(id in c)) { seen.delete(id); changes.push({ type: 'removed', doc: { id, data: () => null } }); } });
+              } else {
+                dirty.forEach((id) => {
+                  const d = c[id];
+                  if (!d) { if (seen.delete(id)) changes.push({ type: 'removed', doc: { id, data: () => null } }); }
+                  else if (!seen.has(id)) { seen.set(id, d); changes.push({ type: 'added', doc: doc(id, d) }); }
+                  else if (seen.get(id) !== d) { seen.set(id, d); changes.push({ type: 'modified', doc: doc(id, d) }); }
+                });
+                dirty.clear();
+              }
+              const list = changes.filter((x) => x.type);
+              if (!list.length) return;
+              cb({ docChanges: () => list, docs: [], size: seen.size, empty: !seen.size, metadata: { fromCache: false, hasPendingWrites: false } });
+            },
+          };
+          listeners.add(l); subscribe(col); setTimeout(l.run, 0);
+          return () => { listeners.delete(l); unsubscribe(col); };
+        }
         let prev = {}; let first = true;
         const l = {
           col, run: () => {
