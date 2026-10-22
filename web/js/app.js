@@ -239,7 +239,12 @@
   };
   function plural(n, one, few, many){ const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return one; if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few; return many; }
   let lang = 'ru';
-  try { const s = localStorage.getItem('sp_lang'); if (s === 'en' || s === 'ru') lang = s; } catch(e) {}
+  // first visit: follow the browser language (Russian-speaking regions get RU, everyone else EN); the choice is remembered once made
+  try {
+    const s = localStorage.getItem('sp_lang');
+    if (s === 'en' || s === 'ru') lang = s;
+    else if (!/^(ru|uk|be|kk)/i.test(navigator.language || 'ru')) lang = 'en';
+  } catch(e) {}
   const t = (k, ...a) => { const v = (T[lang] && T[lang][k]) ?? T.ru[k]; return typeof v === 'function' ? v(...a) : v; };
   const langListeners = [];
   function applyLang(){
@@ -2264,7 +2269,7 @@
     pagerBtn.hidden = false; document.getElementById('achBtn').hidden = false;
   }
   document.getElementById('introStart').addEventListener('click', () => {
-    introCard.hidden = true; SFX.vex();
+    introCard.hidden = true; document.getElementById('igLang').hidden = true; SFX.vex();
     sayLines(S().intro.map(text => ({ who: 'vex', text })), { lock: true, done: () => unlock(true) });
   });
   document.getElementById('introSkip').addEventListener('click', () => unlock(false));
