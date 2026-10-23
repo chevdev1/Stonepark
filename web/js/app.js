@@ -12,7 +12,7 @@
       intro_p:'Бери баллон и оставь свой след. Каждый штрих сразу видят все на этой странице. Включай лофай и рисуй, а потом загляни в ящик с нашими треками.',
       wall_h:'Стена', connecting:'Подключаемся…', offline:'Офлайн-превью',
       wall_lead:'Задержи баллон на месте, и краска потечёт. Баллон для мягких заливок, маркер для чётких контуров. Стена большая: открой её целиком, чтобы найти свободное место.',
-      tools:'Инструменты', tool:'Инструмент', spray:'Баллон', marker:'Маркер', hand:'Рука', cap:'Кэп', cap0:'Тонкий', cap1:'Жирный', cap2:'Супер',
+      tools:'Инструменты', tool:'Инструмент', spray:'Баллон', marker:'Маркер', eraser:'Ластик', hand:'Рука', wall_loading:'Загружаем стену…', cap:'Кэп', cap0:'Тонкий', cap1:'Жирный', cap2:'Супер',
       undo:'Отменить мой штрих', save:'Сохранить PNG', buff:'Закрасить стену', buff_confirm:'Нажми ещё раз, чтобы закрасить всё',
       wall_aria:'Общая стена для граффити. Проведи, чтобы рисовать.', expand:'Вся стена',
       wm_h:'Вся стена', zoom:'Масштаб', fit:'Целиком', close:'Закрыть',
@@ -128,7 +128,7 @@
       intro_p:'Grab a can and leave your mark. Every stroke shows up live for everyone on this page. Put the lofi on, paint, then dig through our crate of tracks.',
       wall_h:'The wall', connecting:'Connecting…', offline:'Offline preview',
       wall_lead:'Hold the can still and the paint starts to drip. Spray for soft fills, marker for clean outlines. The wall is big: open the whole thing to find a free spot.',
-      tools:'Paint tools', tool:'Tool', spray:'Spray', marker:'Marker', hand:'Hand', cap:'Cap', cap0:'Skinny', cap1:'Fat', cap2:'Super',
+      tools:'Paint tools', tool:'Tool', spray:'Spray', marker:'Marker', eraser:'Eraser', hand:'Hand', wall_loading:'Loading the wall…', cap:'Cap', cap0:'Skinny', cap1:'Fat', cap2:'Super',
       undo:'Undo my last', save:'Save PNG', buff:'Buff the wall', buff_confirm:'Click again to buff everything',
       wall_aria:'Shared graffiti wall. Drag to paint.', expand:'Whole wall',
       wm_h:'The whole wall', zoom:'Zoom', fit:'Fit', close:'Close',
@@ -280,7 +280,7 @@
   // 8640 x 4860 = about 5x the old 3840 x 2160 wall (old strokes keep their coordinates and sit in the top-left corner)
   const WW = 8640, WH = 4860;
   const COLORS = ['#FF3EA5','#FF4D4D','#FF9A3C','#FFD23A','#7CFF6B','#2EE6E6','#3D7BFF','#9B5CFF','#F4F1E8','#B8C4C2','#0A0E12','#1E3F42'];
-  const CAPS = { s: [5, 10, 18], m: [1, 3, 6] };
+  const CAPS = { s: [5, 10, 18], m: [1, 3, 6], e: [8, 16, 30] };   // e = eraser: a square wiper, it clears paint (not the bricks)
   const MAX_PTS = 1500, MAX_DRIPS = 12;
   // bricks: one seamless 1920 x 960 texture repeated over the wall
   const BCW = 1920, BCH = 960;
@@ -288,33 +288,56 @@
   const bricks = bricksCv.getContext('2d');
   // paint: a single 8640 x 4860 canvas would not fit in a phone's memory, so paint lives in 512px tiles that are created only where someone painted
   const TS = 512, TX = Math.ceil(WW / TS);
+  // Each tile keeps its pixels in a Uint32Array (paint is always opaque, so a pixel is one 32-bit write: about 100x cheaper than a
+  // canvas fillRect per pixel, and replaying thousands of strokes takes seconds, not minutes). The canvas is only updated, for the
+  // changed rectangle, when the tile is about to be drawn on screen.
   const tiles = new Map();
-  let curFill = '#000', restrict = null;
+  let curCol = 0xFF000000, curHex = '', restrict = null;
+  function setFill(hex){
+    if (hex === curHex) return; curHex = hex;
+    const v = parseInt(hex.slice(1), 16);
+    curCol = (0xFF000000 | ((v & 255) << 16) | (v & 0xFF00) | (v >> 16)) >>> 0;   // #RRGGBB -> little-endian ABGR
+  }
   function tileGet(tx, ty){
     const k = ty * TX + tx; let t = tiles.get(k);
-    if (!t){ const cv = document.createElement('canvas'); cv.width = cv.height = TS; t = { cv, c: cv.getContext('2d'), fs: '', x: tx * TS, y: ty * TS }; tiles.set(k, t); }
+    if (!t){
+      const cv = document.createElement('canvas'); cv.width = cv.height = TS;
+      const buf = new Uint32Array(TS * TS);
+      t = { cv, c: cv.getContext('2d'), buf, img: new ImageData(new Uint8ClampedArray(buf.buffer), TS, TS), x: tx * TS, y: ty * TS, dx0: TS, dy0: TS, dx1: 0, dy1: 0 };
+      tiles.set(k, t);
+    }
     return t;
+  }
+  function mark(t, x0, y0, x1, y1){ if (x0 < t.dx0) t.dx0 = x0; if (y0 < t.dy0) t.dy0 = y0; if (x1 > t.dx1) t.dx1 = x1; if (y1 > t.dy1) t.dy1 = y1; }
+  function flushTile(t){
+    if (t.dx1 <= t.dx0 || t.dy1 <= t.dy0) return;
+    t.c.putImageData(t.img, 0, 0, t.dx0, t.dy0, t.dx1 - t.dx0, t.dy1 - t.dy0);
+    t.dx0 = TS; t.dy0 = TS; t.dx1 = 0; t.dy1 = 0;
   }
   function wpx(x, y){
     if (x < 0 || y < 0 || x >= WW || y >= WH) return;
     const tx = (x / TS) | 0, ty = (y / TS) | 0, k = ty * TX + tx;
     if (restrict && !restrict.has(k)) return;
-    const t = tiles.get(k) || tileGet(tx, ty);
-    if (t.fs !== curFill){ t.c.fillStyle = curFill; t.fs = curFill; }
-    t.c.fillRect(x - t.x, y - t.y, 1, 1);
+    const t = tiles.get(k) || tileGet(tx, ty), lx = x - t.x, ly = y - t.y;
+    t.buf[ly * TS + lx] = curCol; mark(t, lx, ly, lx + 1, ly + 1);
   }
-  function pr(x, y, w, h){
+  // fill (col = curCol) or clear (col = 0) a rectangle; clearing skips tiles that do not exist
+  function fillRectBuf(x, y, w, h, col){
     let x1 = x + w, y1 = y + h;
     if (x < 0) x = 0; if (y < 0) y = 0; if (x1 > WW) x1 = WW; if (y1 > WH) y1 = WH;
     if (x1 <= x || y1 <= y) return;
     for (let ty = (y / TS) | 0; ty * TS < y1; ty++) for (let tx = (x / TS) | 0; tx * TS < x1; tx++){
-      if (restrict && !restrict.has(ty * TX + tx)) continue;
-      const t = tileGet(tx, ty);
-      if (t.fs !== curFill){ t.c.fillStyle = curFill; t.fs = curFill; }
-      const ax = Math.max(x, t.x), ay = Math.max(y, t.y);
-      t.c.fillRect(ax - t.x, ay - t.y, Math.min(x1, t.x + TS) - ax, Math.min(y1, t.y + TS) - ay);
+      const k = ty * TX + tx;
+      if (restrict && !restrict.has(k)) continue;
+      const t = col ? tileGet(tx, ty) : tiles.get(k); if (!t) continue;
+      const ax = Math.max(x, t.x) - t.x, ay = Math.max(y, t.y) - t.y, bx = Math.min(x1, t.x + TS) - t.x, by = Math.min(y1, t.y + TS) - t.y;
+      for (let yy = ay; yy < by; yy++) t.buf.fill(col, yy * TS + ax, yy * TS + bx);
+      mark(t, ax, ay, bx, by);
     }
   }
+  // the eraser: an eraser stroke is stored like any stroke, so it replays in order and can be undone
+  function wclr(x, y, w, h){ fillRectBuf(x, y, w, h, 0); }
+  function pr(x, y, w, h){ fillRectBuf(x, y, w, h, curCol); }
   const view = document.getElementById('wallView'), vctx = view.getContext('2d');
   const mini = document.getElementById('miniMap'), mctx = mini.getContext('2d');
   const thumb = document.getElementById('wallThumb'), tctx = thumb.getContext('2d');
@@ -342,7 +365,7 @@
   }
   function enterGuest(){
     if (guestMode) return;
-    guestMode = true; canPaint = true; dirty.clear();
+    guestMode = true; canPaint = true; dirty.clear(); wallReady = true; showLoading(false);
     try { localStorage.setItem('sp_guest', '1'); } catch(e) {}
     guestRestore(); fullRedraw(); guestSave();
     const b = document.getElementById('guestBadge'); if (b) b.hidden = false;
@@ -382,29 +405,72 @@
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= rr) out.push(dx, dy);
     return (discs[r] = out);
   }
-  function stamp(s, x, y, rand){
-    curFill = s.c;
-    if (s.k === 'm'){ const d = disc(s.r); for (let i = 0; i < d.length; i += 2) wpx(x + d[i], y + d[i + 1]); return; }
-    const n = Math.ceil(s.r * s.r * 0.5) + 2;
-    for (let i = 0; i < n; i++){
-      const a = rand() * Math.PI * 2; let d = s.r * Math.sqrt(rand()); if (rand() < 0.1) d *= 1.7;
-      wpx(Math.round(x + Math.cos(a) * d), Math.round(y + Math.sin(a) * d));
+  // Spray dots come from a fixed table of 256 offsets per radius (uniform in the disc, 10% flung further out); a stamp reads n of them from a
+  // hash-derived start, mirrored/swapped by 3 hash bits. Same hash -> same pixels on every client, and no trig or PRNG per dot.
+  const dotTabs = {};
+  function dotTab(r){
+    if (dotTabs[r]) return dotTabs[r];
+    const rand = rng(7001 + r), out = new Int16Array(512);
+    for (let i = 0; i < 256; i++){
+      const a = rand() * Math.PI * 2; let d = r * Math.sqrt(rand()); if (rand() < 0.1) d *= 1.7;
+      out[i * 2] = Math.round(Math.cos(a) * d); out[i * 2 + 1] = Math.round(Math.sin(a) * d);
     }
+    return (dotTabs[r] = out);
+  }
+  function mix(v){ v = Math.imul(v ^ (v >>> 16), 0x45d9f3b); v = Math.imul(v ^ (v >>> 16), 0x45d9f3b); return (v ^ (v >>> 16)) >>> 0; }
+  // writes n offset pairs around (x, y); fast path when the whole reach (ext) lies inside one tile
+  function stampDots(list, start, n, sym, x, y, ext){
+    const tx = (x / TS) | 0, ty = (y / TS) | 0;
+    if (x >= ext && y >= ext && x + ext < WW && y + ext < WH && x - ext >= tx * TS && y - ext >= ty * TS && x + ext < (tx + 1) * TS && y + ext < (ty + 1) * TS){
+      const k = ty * TX + tx;
+      if (restrict && !restrict.has(k)) return;
+      const t = tiles.get(k) || tileGet(tx, ty), bx = x - t.x, by = y - t.y, buf = t.buf, col = curCol;
+      for (let i = 0; i < n; i++){
+        const j = ((start + i) & 255) * 2; let dx = list[j], dy = list[j + 1];
+        if (sym & 1) dx = -dx; if (sym & 2) dy = -dy; if (sym & 4){ const q = dx; dx = dy; dy = q; }
+        buf[(by + dy) * TS + bx + dx] = col;
+      }
+      mark(t, bx - ext, by - ext, bx + ext + 1, by + ext + 1);
+      return;
+    }
+    for (let i = 0; i < n; i++){
+      const j = ((start + i) & 255) * 2; let dx = list[j], dy = list[j + 1];
+      if (sym & 1) dx = -dx; if (sym & 2) dy = -dy; if (sym & 4){ const q = dx; dx = dy; dy = q; }
+      wpx(x + dx, y + dy);
+    }
+  }
+  function stamp(s, x, y, h){
+    if (s.k === 'e'){ wclr(x - s.r, y - s.r, s.r * 2 + 1, s.r * 2 + 1); return; }
+    setFill(s.c);
+    if (s.k === 'm'){
+      const d = disc(s.r), r = s.r, tx = (x / TS) | 0, ty = (y / TS) | 0;
+      if (x >= r && y >= r && x + r < WW && y + r < WH && x - r >= tx * TS && y - r >= ty * TS && x + r < (tx + 1) * TS && y + r < (ty + 1) * TS){
+        const k = ty * TX + tx;
+        if (restrict && !restrict.has(k)) return;
+        const t = tiles.get(k) || tileGet(tx, ty), bx = x - t.x, by = y - t.y, buf = t.buf, col = curCol;
+        for (let i = 0; i < d.length; i += 2) buf[(by + d[i + 1]) * TS + bx + d[i]] = col;
+        mark(t, bx - r, by - r, bx + r + 1, by + r + 1);
+        return;
+      }
+      for (let i = 0; i < d.length; i += 2) wpx(x + d[i], y + d[i + 1]);
+      return;
+    }
+    stampDots(dotTab(s.r), h & 255, Math.ceil(s.r * s.r * 0.5) + 2, (h >>> 8) & 7, x, y, Math.ceil(s.r * 1.7) + 1);
   }
   function drawFrom(id){
     const st = strokes.get(id); if (!st) return;
     const s = st.data, p = s.p, n = p.length / 2, seed = hash(id);
     for (let i = st.drawn; i < n; i++){
       const x = p[i * 2], y = p[i * 2 + 1];
-      if (i === 0){ stamp(s, x, y, rng(seed)); continue; }
+      if (i === 0){ stamp(s, x, y, mix(seed)); continue; }
       const px = p[i * 2 - 2], py = p[i * 2 - 1];
       const dist = Math.hypot(x - px, y - py);
       const spacing = s.k === 'm' ? 1 : Math.max(1, s.r * 0.35);
       const steps = Math.max(1, Math.ceil(dist / spacing));
-      for (let k = 1; k <= steps; k++) stamp(s, Math.round(px + (x - px) * k / steps), Math.round(py + (y - py) * k / steps), rng(seed ^ (i * 7919 + k * 104729)));
+      for (let k = 1; k <= steps; k++) stamp(s, Math.round(px + (x - px) * k / steps), Math.round(py + (y - py) * k / steps), mix(seed ^ (i * 7919 + k * 104729)));
     }
     st.drawn = n;
-    curFill = s.c;
+    setFill(s.c);
     const w = s.r >= 8 ? 3 : (s.r >= 4 ? 2 : 1);
     for (const d of s.d){ pr(d[0], d[1], w, d[2]); pr(d[0] - 1, d[1] + d[2], w + 2, 2); }
     paintChanged();
@@ -425,7 +491,7 @@
   function redrawTiles(set){
     if (!set.size) return;
     if (replaying) return;                       // the running full replay will paint it anyway
-    set.forEach(k => { const t = tiles.get(k); if (t) t.c.clearRect(0, 0, TS, TS); });
+    set.forEach(k => { const t = tiles.get(k); if (t){ t.buf.fill(0); mark(t, 0, 0, TS, TS); } });
     const list = [];
     for (const [id, st] of strokes){ const t = new Set(); addTiles(t, box(st)); for (const k of t) if (set.has(k)){ list.push([id, st]); break; } }
     list.sort((a, b) => a[1].data.t - b[1].data.t);
@@ -433,18 +499,32 @@
     try { for (const [id, st] of list){ st.drawn = 0; drawFrom(id); } } finally { restrict = null; }
     paintChanged();
   }
+  // while the wall is still being replayed and the editor is open, a cover hides the half-painted canvas
+  const loadEl = document.getElementById('wallLoading'), loadBar = document.getElementById('wallLoadingBar');
+  function showLoading(on){ if (loadEl){ const was = !loadEl.hidden; loadEl.hidden = !on; if (was && !on) requestRender(); } }
+  function setLoading(f){ if (loadBar) loadBar.style.width = Math.round(f * 100) + '%'; }
+  // the wall counts as ready after the first full replay; until then (data still on its way, or being painted) the editor shows the cover
+  let wallReady = false, coverTimer = null;
+  function coverIfNotReady(){
+    if (wallReady && !replaying) return;
+    showLoading(true);
+    clearTimeout(coverTimer); coverTimer = setTimeout(() => showLoading(false), 9000);   // server down: never keep the player waiting
+  }
   let replayGen = 0, replaying = false;
   function fullRedraw(){
     const gen = ++replayGen; replaying = true;
+    clearTimeout(coverTimer);                  // data arrived: the cover now stays until the replay is done
     tiles.clear(); paintChanged();
+    if (!editor.hidden) showLoading(true);
     const all = [...strokes.entries()].sort((a, b) => a[1].data.t - b[1].data.t);
     let i = 0;
     (function step(){
       if (gen !== replayGen) return;
-      const t0 = performance.now();
-      while (i < all.length && performance.now() - t0 < 12){ const [id, st] = all[i++]; if (strokes.get(id) !== st) continue; st.drawn = 0; drawFrom(id); }
-      if (i < all.length){ requestAnimationFrame(step); return; }
-      replaying = false;
+      // nothing is drawn to the screen while replaying (paintChanged/render are paused); steps are timer-driven, not frame-driven
+      const t0 = performance.now(), open = !editor.hidden, budget = open ? 40 : 8;   // cover shown: go fast; landing page: stay light
+      while (i < all.length && performance.now() - t0 < budget){ const [id, st] = all[i++]; if (strokes.get(id) !== st) continue; st.drawn = 0; drawFrom(id); }
+      if (i < all.length){ setLoading(i / all.length); setTimeout(step, open ? 0 : 6); return; }
+      replaying = false; wallReady = true; clearTimeout(coverTimer); showLoading(false); setLoading(0);
       // strokes that arrived or grew while the replay was running
       for (const [id, st] of strokes) if (st.drawn < st.data.p.length / 2) drawFrom(id);
       paintChanged();
@@ -453,8 +533,8 @@
   function clean(d){
     if (!d || typeof d !== 'object') return null;
     const c = typeof d.c === 'string' && /^#[0-9a-fA-F]{6}$/.test(d.c) ? d.c : null;
-    const k = d.k === 'm' ? 'm' : 's';
-    const r = Math.max(1, Math.min(20, Math.round(Number(d.r) || 4)));
+    const k = d.k === 'm' ? 'm' : (d.k === 'e' ? 'e' : 's');
+    const r = Math.max(1, Math.min(32, Math.round(Number(d.r) || 4)));
     if (!c || !Array.isArray(d.p) || d.p.length < 2) return null;
     const p = [];
     for (let i = 0; i + 1 < d.p.length && i < MAX_PTS * 2; i += 2){
@@ -505,6 +585,7 @@
     }
     for (let ty = Math.floor(y0 / TS); ty * TS < y1; ty++) for (let tx = Math.floor(x0 / TS); tx * TS < x1; tx++){
       const t = tiles.get(ty * TX + tx); if (!t) continue;
+      flushTile(t);
       const ax = Math.max(x0, t.x), ay = Math.max(y0, t.y), tx1 = Math.min(x1, t.x + TS), ty1 = Math.min(y1, t.y + TS);
       dctx.drawImage(t.cv, ax - t.x, ay - t.y, tx1 - ax, ty1 - ay, X(ax), Y(ay), X(tx1) - X(ax), Y(ty1) - Y(ay));
     }
@@ -514,11 +595,11 @@
     const k = w / WW;
     c2.imageSmoothingEnabled = true;
     c2.fillStyle = '#183538'; c2.fillRect(0, 0, w, h);
-    tiles.forEach(t => c2.drawImage(t.cv, t.x * k, t.y * k, TS * k, TS * k));
+    tiles.forEach(t => { flushTile(t); c2.drawImage(t.cv, t.x * k, t.y * k, TS * k, TS * k); });
   }
   function render(){
     needRender = false;
-    if (editor.hidden) return;
+    if (editor.hidden || (loadEl && !loadEl.hidden)) return;
     const s = cam.z * dpr;
     const sw = view.width / s, sh = view.height / s, sx = cam.x - sw / 2, sy = cam.y - sh / 2;
     vctx.imageSmoothingEnabled = false;
@@ -564,6 +645,7 @@
   }
   let thumbTimer = null;
   function paintChanged(){
+    if (replaying) return;
     requestRender();
     if (thumbTimer) return;
     thumbTimer = setTimeout(() => {
@@ -595,11 +677,13 @@
   const strokeTimes = [], colorsUsed = new Set(); let strokeTotal = 0;
   function newStroke(x, y){
     const s = { c: color, k: tool, r: CAPS[tool][cap], p: [x, y], d: [], t: Date.now(), by: uid };
-    achievement('first_tag');
-    strokeTotal++; if (strokeTotal % 30 === 0) addDope(1);
-    const now = Date.now(); strokeTimes.push(now); while (strokeTimes.length && now - strokeTimes[0] > 4000) strokeTimes.shift();
-    if (strokeTimes.length >= 5) achievement('speed5');
-    colorsUsed.add(color); if (colorsUsed.size >= 6) achievement('palette');
+    if (tool !== 'e'){
+      achievement('first_tag');
+      strokeTotal++; if (strokeTotal % 30 === 0) addDope(1);
+      const now = Date.now(); strokeTimes.push(now); while (strokeTimes.length && now - strokeTimes[0] > 4000) strokeTimes.shift();
+      if (strokeTimes.length >= 5) achievement('speed5');
+      colorsUsed.add(color); if (colorsUsed.size >= 6) achievement('palette');
+    }
     const id = rid('s'); strokes.set(id, { data: s, drawn: 0 }); mine.push(id); cur = id; dripIdx = -1; drawFrom(id); dirty.add(id);
   }
   function addPoint(x, y){
@@ -712,6 +796,7 @@
   function openWall(){
     try { SFX.spray(); } catch(e) {}
     editor.hidden = false; document.body.classList.add('locked');
+    coverIfNotReady();
     try { if (editor.requestFullscreen && document.fullscreenEnabled) editor.requestFullscreen().catch(() => {}); } catch(e) {}
     requestAnimationFrame(() => { resizeView(); if (cam.z === 1 && !openWall.done){ const sp = pickSpawn(); cam.x = sp[0]; cam.y = sp[1]; openWall.done = true; } clampCam(); requestRender(); });
     document.getElementById('edClose').focus();
@@ -768,7 +853,7 @@
   setInterval(() => { if (dirty.size) flush(); }, 250);
   function subscribeStrokes(){
     if (unsubStrokes){ unsubStrokes(); unsubStrokes = null; }
-    strokes.clear(); mine.length = 0; replayGen++; replaying = false; tiles.clear(); paintChanged();
+    strokes.clear(); mine.length = 0; replayGen++; replaying = false; wallReady = false; tiles.clear(); paintChanged(); if (!editor.hidden) coverIfNotReady();
     if (guestMode){ guestRestore(); fullRedraw(); }
     col = db.collection('megawall/' + epoch + '/strokes');
     let first = true;
@@ -788,7 +873,7 @@
         else { ex.data = d; ex.bb = null; if (!full && !replaying){ ex.drawn = prev; drawFrom(id); } }
       }
       if (full) fullRedraw(); else redrawTiles(dirtyTiles);
-    }, () => setStatus('live_paused'));
+    }, () => { wallReady = true; showLoading(false); setStatus('live_paused'); });
   }
   document.getElementById('undoBtn').addEventListener('click', async () => {
     while (mine.length){
@@ -834,7 +919,7 @@
     COLORS.forEach((hex, i) => {
       const b = el('button', 'swatch'); b.type = 'button'; b.style.background = hex;
       b.setAttribute('aria-label', t('colors')[i]); b.setAttribute('aria-pressed', hex === color ? 'true' : 'false');
-      b.addEventListener('click', () => { color = hex; sw.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); if (tool === 'h') setTool('s'); });
+      b.addEventListener('click', () => { color = hex; sw.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); if (tool === 'h' || tool === 'e') setTool('s'); });
       sw.appendChild(b);
     });
     sw.setAttribute('aria-label', lang === 'ru' ? 'Цвета' : 'Colors');

@@ -543,6 +543,7 @@
   </div>
   <div class="ed-stage" id="edStage">
     <canvas id="wallView" role="img" data-i18n-attr="aria-label:wall_aria"></canvas>
+      <div class="wall-loading" id="wallLoading" role="status" hidden><b data-i18n="wall_loading">Загружаем стену…</b><span class="wl-bar"><i id="wallLoadingBar"></i></span></div>
     <div class="wchat" id="wchat" role="region" data-i18n-attr="aria-label:chat_h">
       <div class="wc-top"><span data-i18n="chat_h">ЧАТ СТЕНЫ</span><span id="wcCount"></span></div>
       <div class="wc-list" id="wcList" aria-live="polite"></div>
@@ -566,6 +567,7 @@
     <div class="seg" role="group" data-i18n-attr="aria-label:tool">
       <button type="button" data-tool="s" aria-pressed="true" data-i18n="spray">Баллон</button>
       <button type="button" data-tool="m" aria-pressed="false" data-i18n="marker">Маркер</button>
+      <button type="button" data-tool="e" aria-pressed="false" data-i18n="eraser">Ластик</button>
       <button type="button" data-tool="h" aria-pressed="false" data-i18n="hand">Рука</button>
     </div>
     <div class="seg" role="group" data-i18n-attr="aria-label:cap">

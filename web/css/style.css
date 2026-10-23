@@ -1099,3 +1099,10 @@ html[data-motion="off"] .boot-can,html[data-motion="off"] .bc-puff,html[data-mot
 #pcur canvas{display:block;width:64px;height:64px;image-rendering:pixelated}
 #ptrail{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:99999;pointer-events:none}
 html.pcur:not(.pcur-native),html.pcur:not(.pcur-native) *{cursor:none !important}
+
+/* ---------- wall: loading cover + eraser ---------- */
+.wall-loading{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#05090D;color:#E8F1EE}
+.wall-loading[hidden]{display:none}
+.wall-loading b{font-family:'Press Start 2P',monospace;font-size:12px;font-weight:400}
+.wl-bar{display:block;width:min(260px,70%);height:14px;border:3px solid #E8F1EE;padding:2px;background:#071216}
+.wl-bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,#5CFF96 0 8px,#2EA866 8px 10px)}

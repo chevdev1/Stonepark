@@ -129,7 +129,7 @@
         // big live collections (the wall's strokes: limit >= 10000) are diffed per changed document;
         // small ones are re-sorted and compared as a whole
         if (opts.n >= 10000) {
-          const seen = new Map(); const dirty = new Set(); let all = true, started = false;
+          const seen = new Map(); const dirty = new Set(); let all = true, started = false, firstCb = true;
           const l = {
             col,
             touch: (id) => { if (id === undefined) all = true; else dirty.add(id); },
@@ -152,7 +152,8 @@
                 dirty.clear();
               }
               const list = changes.filter((x) => x.type);
-              if (!list.length) return;
+              if (!list.length && !firstCb) return;     // the first answer is always delivered, even for an empty wall
+              firstCb = false;
               cb({ docChanges: () => list, docs: [], size: seen.size, empty: !seen.size, metadata: { fromCache: false, hasPendingWrites: false } });
             },
           };
